@@ -1,15 +1,50 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/app_palette.dart';
+import '../core/supabase_service.dart';
 import '../widgets/settings/settings_menu.dart';
 import 'profile_details_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
   @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  Future<void> _showInfoDialog(String title, String message) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('ปิด'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final user = Supabase.instance.client.auth.currentUser;
+    final email = user?.email ?? 'No email';
+    final displayName = SupabaseService.displayName(user);
+    final avatarUrl = SupabaseService.avatarUrl(user);
+
     return Scaffold(
+      bottomNavigationBar: const SafeArea(
+        top: false,
+        minimum: EdgeInsets.fromLTRB(10, 0, 10, 12),
+        child: _BottomNavBar(),
+      ),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -44,24 +79,32 @@ class SettingsScreen extends StatelessWidget {
                         ),
                         child: Row(
                           children: [
-                            const CircleAvatar(
+                            CircleAvatar(
                               radius: 20,
-                              backgroundColor: Color(0xFFD989A2),
-                              child: Icon(Icons.person, color: AppPalette.cardPink),
+                              backgroundColor: const Color(0xFFD989A2),
+                              backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                              child: avatarUrl == null
+                                  ? const Icon(Icons.person, color: AppPalette.cardPink)
+                                  : null,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
+                                children: [
+                                  if (displayName != null)
+                                    Text(
+                                      displayName,
+                                      style: const TextStyle(
+                                        color: AppPalette.textDark,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  if (displayName != null) const SizedBox(height: 4),
                                   Text(
-                                    'User :',
-                                    style: TextStyle(color: AppPalette.textDark, fontSize: 18),
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    'Email :',
-                                    style: TextStyle(color: AppPalette.textDark, fontSize: 18),
+                                    email,
+                                    style: const TextStyle(color: AppPalette.textDark, fontSize: 18),
                                   ),
                                 ],
                               ),
@@ -69,7 +112,7 @@ class SettingsScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 18),
                       const Text(
                         'Other Settings',
                         style: TextStyle(
@@ -93,24 +136,54 @@ class SettingsScreen extends StatelessWidget {
                           const SettingsDividerLine(),
                           const SettingsMenuItem(icon: Icons.lock_outline, label: 'Password'),
                           const SettingsDividerLine(),
-                          const SettingsMenuItem(
+                          SettingsMenuItem(
                             icon: Icons.medical_services_outlined,
-                            label: 'Emergency',
+                            label: 'เบอร์ฉุกเฉิน',
+                            onTap: () {
+                              _showInfoDialog(
+                                'เบอร์ฉุกเฉิน',
+                                'กรณีฉุกเฉินสามารถโทร 1669 ได้ทันที',
+                              );
+                            },
                           ),
                         ],
                       ),
                       const SizedBox(height: 18),
-                      const SettingsMenuGroup(
+                      SettingsMenuGroup(
                         children: [
-                          SettingsMenuItem(icon: Icons.info_outline, label: 'About Application'),
-                          SettingsDividerLine(),
-                          SettingsMenuItem(icon: Icons.menu_book_outlined, label: 'Help/FAQ'),
-                          SettingsDividerLine(),
-                          SettingsMenuItem(icon: Icons.logout, label: 'Logout', isLogout: true),
+                          SettingsMenuItem(
+                            icon: Icons.info_outline,
+                            label: 'About app',
+                            onTap: () {
+                              _showInfoDialog(
+                                'About app',
+                                'แอพพลิเคชันนี้ทำขึ้นเพื่อจำลองและตรวจเช็คระบบการแจ้งเตือน',
+                              );
+                            },
+                          ),
+                          const SettingsDividerLine(),
+                          SettingsMenuItem(
+                            icon: Icons.menu_book_outlined,
+                            label: 'ติดต่อสอบถามเพิ่มเติม',
+                            onTap: () {
+                              _showInfoDialog(
+                                'ติดต่อสอบถามเพิ่มเติม',
+                                'หากต้องการสอบถามเพิ่มเติม กรุณาติดต่อผู้พัฒนาแอพพลิเคชัน',
+                              );
+                            },
+                          ),
+                          const SettingsDividerLine(),
+                          SettingsMenuItem(
+                            icon: Icons.logout,
+                            label: 'Logout',
+                            isLogout: true,
+                            onTap: () async {
+                              await Supabase.instance.client.auth.signOut();
+                            },
+                          ),
                         ],
                       ),
                       const SizedBox(height: 24),
-                      const _BottomNavBar(),
                     ],
                   ),
                 ),

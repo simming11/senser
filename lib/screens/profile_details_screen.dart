@@ -1,13 +1,86 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/app_palette.dart';
-import '../widgets/profile/profile_field.dart';
+import '../core/supabase_service.dart';
 
-class ProfileDetailsScreen extends StatelessWidget {
+class ProfileDetailsScreen extends StatefulWidget {
   const ProfileDetailsScreen({super.key});
 
   @override
+  State<ProfileDetailsScreen> createState() => _ProfileDetailsScreenState();
+}
+
+class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
+  final _fullNameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoading = false;
+  String? _message;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    final profile = await SupabaseService.fetchProfile(user.id);
+    _fullNameController.text =
+        profile?['full_name'] as String? ?? SupabaseService.displayName(user) ?? '';
+    _phoneController.text = profile?['phone'] as String? ?? '';
+    _passwordController.text = '';
+  }
+
+  Future<void> _saveProfile() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    setState(() {
+      _isLoading = true;
+      _message = null;
+    });
+    try {
+      await SupabaseService.upsertProfile(
+        user.id,
+        _fullNameController.text.trim(),
+        _phoneController.text.trim(),
+      );
+      if (_passwordController.text.isNotEmpty) {
+        await Supabase.instance.client.auth.updateUser(
+          UserAttributes(password: _passwordController.text),
+        );
+      }
+      setState(() {
+        _message = 'บันทึกเรียบร้อย';
+      });
+    } catch (e) {
+      setState(() {
+        _message = 'บันทึกไม่สำเร็จ: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _phoneController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final user = Supabase.instance.client.auth.currentUser;
+    final avatarUrl = SupabaseService.avatarUrl(user);
+
     return Scaffold(
       body: SafeArea(
         child: LayoutBuilder(
@@ -44,10 +117,13 @@ class ProfileDetailsScreen extends StatelessWidget {
                       Center(
                         child: Stack(
                           children: [
-                            const CircleAvatar(
+                            CircleAvatar(
                               radius: 45,
-                              backgroundColor: Color(0xFFD97FA2),
-                              child: Icon(Icons.person, color: Color(0xFFF6DCE5), size: 64),
+                              backgroundColor: const Color(0xFFD97FA2),
+                              backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                              child: avatarUrl == null
+                                  ? const Icon(Icons.person, color: Color(0xFFF6DCE5), size: 64)
+                                  : null,
                             ),
                             Positioned(
                               right: 0,
@@ -66,14 +142,18 @@ class ProfileDetailsScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      const ProfileField(label: 'Full Name'),
+                      _buildField('Full Name', _fullNameController),
                       const SizedBox(height: 16),
-                      const ProfileField(label: 'E-mail'),
+                      _buildField('E-mail', TextEditingController(text: user?.email ?? ''), enabled: false),
                       const SizedBox(height: 16),
-                      const ProfileField(label: 'Phone-Number'),
+                      _buildField('Phone-Number', _phoneController),
                       const SizedBox(height: 16),
-                      const ProfileField(label: 'Password'),
-                      const SizedBox(height: 24),
+                      if (_message != null)
+                        Text(
+                          _message!,
+                          style: TextStyle(color: _message!.contains('ไม่สำเร็จ') ? Colors.red : Colors.green),
+                        ),
+                      const SizedBox(height: 12),
                       Row(
                         children: [
                           Expanded(
@@ -92,7 +172,7 @@ class ProfileDetailsScreen extends StatelessWidget {
                                   style: TextStyle(
                                     color: Colors.black87,
                                     fontWeight: FontWeight.w700,
-                                    fontSize: 28,
+                                    fontSize: 20,
                                   ),
                                 ),
                               ),
@@ -103,21 +183,27 @@ class ProfileDetailsScreen extends StatelessWidget {
                             child: SizedBox(
                               height: 54,
                               child: ElevatedButton(
-                                onPressed: () {},
+                                onPressed: _isLoading ? null : _saveProfile,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppPalette.save,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(26),
                                   ),
                                 ),
-                                child: const Text(
-                                  'SAVE',
-                                  style: TextStyle(
-                                    color: AppPalette.softWhite,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 28,
-                                  ),
-                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                      )
+                                    : const Text(
+                                        'SAVE',
+                                        style: TextStyle(
+                                          color: AppPalette.softWhite,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 20,
+                                        ),
+                                      ),
                               ),
                             ),
                           ),
@@ -131,6 +217,34 @@ class ProfileDetailsScreen extends StatelessWidget {
           },
         ),
       ),
+    );
+  }
+
+  Widget _buildField(String label, TextEditingController controller, {bool enabled = true, bool obscureText = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF95AFB2),
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          enabled: enabled,
+          obscureText: obscureText,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+        ),
+      ],
     );
   }
 }

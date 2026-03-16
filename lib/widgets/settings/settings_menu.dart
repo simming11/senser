@@ -50,9 +50,10 @@ class SettingsMenuItem extends StatelessWidget {
                 label,
                 style: TextStyle(
                   color: color,
-                  fontSize: 32,
+                  fontSize: 24,
                   fontWeight: FontWeight.w600,
                 ),
+                maxLines: 2,
               ),
             ),
             Icon(Icons.chevron_right, color: color, size: 34),
